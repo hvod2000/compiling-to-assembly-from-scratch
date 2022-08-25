@@ -66,3 +66,59 @@ comparison = infix(EQUAL | NOT_EQUAL, sum_expr)
 
 # expression <- comparison
 expression.parse = comparison.parse
+
+
+# this is statement declaration, the definition will be later
+statement = Parser()
+
+# return_stmt <- RETURN expression SEMICOLON
+return_stmt = RETURN & expression.bind(
+    lambda expr: SEMICOLON & constant(Return(expr)))
+
+# expression_stmt <- expression SEMICOLON
+expression_stmt = expression.bind(lambda term: SEMICOLON & constant(term))
+
+# if_stmt <- IF LEFT_PAREN expression RIGHT_PAREN statement ELSE statement
+if_stmt = (IF & LEFT_PAREN & expression).bind(lambda condition:
+    (RIGHT_PAREN & statement).bind(lambda consequence:
+        (ELSE & statement).map(lambda alternative:
+            If(condition, consequence, alternative))))
+
+# while_stmt <- WHILE LEFT_PAREN expression RIGHT_PAREN statement
+while_stmt = (WHILE & LEFT_PAREN & expression).bind(lambda condition:
+    (RIGHT_PAREN & statement).map(lambda body:
+        While(condition, body)))
+
+# var_stmt <- VAR ID ASSIGN expression SEMICOLON
+var_stmt = (VAR & ID).bind(lambda name:
+    (ASSIGN & expression).bind(lambda value:
+        SEMICOLON & constant(Var(name, value))))
+
+# assignment_stmt <- ID ASSIGN expression SEMICOLON
+assignment_stmt = ID.bind(lambda name:
+    (ASSIGN & expression).bind(lambda value:
+        SEMICOLON & constant(Assign(name, value))))
+
+# block_stmt <- LEFT_BRACE statement* RIGHT_BRACE
+block_stmt = (LEFT_BRACE & statement.repeat()).bind(lambda stmts:
+    RIGHT_BRACE & constant(stmts))
+
+# parameters <- (ID (COMMA ID)*)?
+parameters = ID.bind(lambda head:
+    (COMMA & ID).repeat().map(lambda tail: [head] + tail)
+) | constant([])
+
+# function_stmt <- FUNCTION ID LEFT_PAREN parameters RIGHT_PAREN block_stmt
+function_stmt = (FUNCTION & ID).bind(lambda name:
+    (LEFT_PAREN & parameters).bind(lambda params:
+        (RIGHT_PAREN & block_stmt).map(lambda body:
+            Function(name, params, body))))
+
+# statement <- all the statements defined above
+statement.parse = (
+    return_stmt | function_stmt | if_stmt | while_stmt
+    | var_stmt | assignment_stmt | block_stmt | expression_stmt
+).parse
+
+# the parser of the whole language
+parser = ignored & statement.repeat().map(lambda stmts: Block(stmts))
