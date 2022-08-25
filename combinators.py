@@ -1,4 +1,5 @@
 import functools
+import re
 from collections import namedtuple
 from math import inf
 
@@ -31,14 +32,6 @@ class Parser:
         self.parse = parse
 
     @staticmethod
-    def regex(pattern):
-        return Parser(functools.partial(match, pattern=pattern))
-
-    @staticmethod
-    def constant(constant):
-        return Parser(lambda s: ParseResult(constant, s))
-
-    @staticmethod
     def error(message):
         return Parser(ParseError.throw(message))
 
@@ -69,14 +62,24 @@ class Parser:
         return self.bind(lambda _: other)
 
     def map(self, f):
-        return self.bind(lambda x: Parser.constant(f(x)))
+        return self.bind(lambda x: constant(f(x)))
 
     def maybe(self):
         return self.repeat(maximum=1)
 
     def parse_string(self, string: str):
         if result := self.parse(Source(string, 0)):
-            if result.index == len(string):
+            excess_chars = len(string) - result.source.index
+            if not excess_chars:
                 return result.value
-            raise ParseError(f"{result.index - len(string)} chars left")
+            raise ParseError(f"{excess_chars} chars left")
         raise ParseError(f"Failed to parse")
+
+
+def constant(constant) -> Parser:
+    return Parser(lambda s: ParseResult(constant, s))
+
+
+def regex(pattern) -> Parser:
+    regex = re.compile(pattern) if isinstance(pattern, str) else pattern
+    return Parser(functools.partial(match, pattern=regex))
