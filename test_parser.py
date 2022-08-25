@@ -3,6 +3,7 @@ from nodes import *
 
 
 assert parser.parse_string("1;") == Block([Number(1)])
+assert parser.parse_string("1;") != Block([(1,)])
 
 source = """
     function factorial(n) {
@@ -18,9 +19,9 @@ source = """
 expected = Block([
     Function("factorial", ["n"], [
         Var("result", Number(value=1)),
-        While(NotEqual(Id("n"), Number(1)), [
-            Assign("result", Multiply(Id("result"), Id("n"))),
-            Assign("n", Subtract(Id("n"), Number(1)))
+        While(BinaryOperation(Id("n"), "!=", Number(1)), [
+            Assign("result", BinaryOperation(Id("result"), "*", Id("n"))),
+            Assign("n", BinaryOperation(Id("n"),"-", Number(1)))
         ]),
         Return(Id("result")),
     ])
