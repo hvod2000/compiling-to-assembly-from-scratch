@@ -9,6 +9,7 @@ class AST:
     def __iter__(self):
         return (getattr(self, field.name) for field in fields(self))
 
+
 @dataclass
 class Number(AST):
     value: int
@@ -55,7 +56,7 @@ class If(AST):
 
 
 @dataclass
-class Function:
+class Function(AST):
     name: str
     parameters: list[str]
     body: AST
@@ -77,3 +78,8 @@ class Assign:
 class While:
     conditional: AST
     body: AST
+
+
+@dataclass
+class Assert(AST):
+    condition: AST

@@ -48,7 +48,8 @@ arguments = expression.bind(lambda head:
 # call <- ID LEFT_PAREN arguments RIGHT_PAREN
 call = ID.bind(lambda callee:
     LEFT_PAREN & arguments.bind(lambda args:
-    RIGHT_PAREN & constant(Call(callee, args))))
+    RIGHT_PAREN & constant(
+        Call(callee, args) if callee != "assert" else Assert(*args))))
 
 # atom <- call / ID / INTEGER / LEFT_PAREN expression RIGHT_PAREN
 atom = (
@@ -101,7 +102,7 @@ assignment_stmt = ID.bind(lambda name:
 
 # block_stmt <- LEFT_BRACE statement* RIGHT_BRACE
 block_stmt = (LEFT_BRACE & statement.repeat()).bind(lambda stmts:
-    RIGHT_BRACE & constant(stmts))
+    RIGHT_BRACE & constant(Block(stmts)))
 
 # parameters <- (ID (COMMA ID)*)?
 parameters = ID.bind(lambda head:
