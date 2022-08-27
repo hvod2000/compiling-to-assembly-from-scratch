@@ -21,16 +21,21 @@ class Environment:
         yield "mov fp, sp"
         if registers:
             yield "push {" + ", ".join(registers) + "}"
-        self.next_local_offset = -4 - 4 * len(registers)
+        self.next_local_offset = -8 - 4 * len(registers)
 
     def push_var(self, variable) -> Iterator[str]:
-        # TODO: waste less stack space by taking record of offsets
         if variable in self.locals:
             yield f"str r0, [fp, #{self.locals[variable]}]"
         else:
-            self.locals[variable] = self.next_local_offset - 4
-            yield "push {r0, ip}"
-            self.next_local_offset -= 8
+            offset = self.next_local_offset
+            self.locals[variable] = offset
+            if offset % 8 == 4:
+                yield f"str r0, [fp, #{offset}]"
+                self.next_local_offset -= 12
+            else:
+                # place taken by dummy register will be used by next Var
+                yield "push {r0, ip}"
+                self.next_local_offset += 4
 
     def free(self) -> Iterator[str]:
         if self.locals:
@@ -120,7 +125,7 @@ def _(call: Call, env: Environment) -> Iterator[str]:
             yield from emit(arg, env)
             yield f"str r0, [sp, #{4*i}]"
         yield from emit(call.args[0], env)
-        registers = [f"r{i+1}" for i in range(extra_args - 1)]
+        registers = [f"r{i+1}" for i in range(extra_args)]
         yield "pop {" + ", ".join(registers) + "}"
     yield f"bl {call.calle}"
 
