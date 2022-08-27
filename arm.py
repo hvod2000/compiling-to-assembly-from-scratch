@@ -165,3 +165,16 @@ def _(assgin: Assign, env: Environment) -> Iterator[str]:
         raise Exception(f'"{assgin.name}" is undefined')
     yield from emit(assgin.value, env)
     yield from env.push_var(assgin.name)
+
+
+@emit.register
+def _(whl: While, env: Environment):
+    start_label = new_label()
+    end_label = new_label()
+    yield f"{start_label}:"
+    yield from emit(whl.conditional, env)
+    yield "cmp r0, #0"
+    yield f"beq {end_label}"
+    yield from emit(whl.body, env)
+    yield f"b {start_label}"
+    yield f"{end_label}:"
