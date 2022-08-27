@@ -8,6 +8,7 @@ from nodes import *
 @dataclass
 class Environment:
     locals: dict[str, int]
+    next_local_offset: int
 
     def push(self, variables: list[str]) -> Iterator[str]:
         if len(variables) > 4:
@@ -17,17 +18,25 @@ class Environment:
             registers.append("ip")
         for i, v in enumerate(variables):
             self.locals[v] = (i - len(registers)) * 4
+        yield "mov fp, sp"
         if registers:
-            yield "mov fp, sp"
             yield "push {" + ", ".join(registers) + "}"
+        self.next_local_offset = -4 - 4 * len(registers)
 
-    def free(self, variables: list[str]) -> Iterator[str]:
-        if len(variables) > 4:
-            raise NotImplementedError(">4 params is not implemented yet")
-        for v in variables:
-            del self.locals[v]
-        if variables:
+    def push_var(self, variable) -> Iterator[str]:
+        # TODO: waste less stack space by taking record of offsets
+        if variable in self.locals:
+            yield f"str r0, [fp, #{self.locals[variable]}]"
+        else:
+            self.locals[variable] = self.next_local_offset - 4
+            yield "push {r0, ip}"
+            self.next_local_offset -= 8
+
+    def free(self) -> Iterator[str]:
+        if self.locals:
             yield "mov sp, fp"
+        self.locals = {}
+        self.next_local_offset = 0
 
 
 def label_factory(seed: int = 0):
@@ -60,7 +69,7 @@ def _(f: Function, env: Environment) -> Iterator[str]:
         yield ".global main"
     yield f.name + ":"
     yield "  push {fp, lr}"
-    for line in chain(env.push(params), emit(f.body, env), env.free(params)):
+    for line in chain(env.push(params), emit(f.body, env), env.free()):
         yield "  " + line
     yield "  mov r0, #0"
     yield "  pop {fp, pc}"
@@ -141,3 +150,9 @@ def _(ret: Return, env: Environment) -> Iterator[str]:
     yield from emit(ret.term, env)
     yield "mov sp, fp"
     yield "pop {fp, pc}"
+
+
+@emit.register
+def _(var: Var, env: Environment) -> Iterator[str]:
+    yield from emit(var.value, env)
+    yield from env.push_var(var.name)
