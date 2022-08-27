@@ -109,17 +109,19 @@ def _(binary: BinaryOperation, env: Environment) -> Iterator[str]:
 
 @emit.register
 def _(call: Call, env: Environment) -> Iterator[str]:
-    count = len(call.args)
-    if count == 1:
+    if len(call.args) == 1:
         yield from emit(call.args[0], env)
-    elif count > 1:
-        # TODO: what about 8-byte stack alignment?
-        yield f"sub sp, sp, #{4 * count - 4}"
+    elif len(call.args) > 1:
+        extra_args = len(call.args) - 1
+        if extra_args % 2 == 1:
+            extra_args += 1
+        yield f"sub sp, sp, #{4 * extra_args}"
         for i, arg in enumerate(call.args[1:]):
             yield from emit(arg, env)
             yield f"str r0, [sp, #{4*i}]"
         yield from emit(call.args[0], env)
-        yield "pop {" + ", ".join(f"r{i+1}" for i in range(count - 1)) + "}"
+        registers = [f"r{i+1}" for i in range(extra_args - 1)]
+        yield "pop {" + ", ".join(registers) + "}"
     yield f"bl {call.calle}"
 
 
