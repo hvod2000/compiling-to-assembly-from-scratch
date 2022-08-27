@@ -17,14 +17,14 @@ source = """
 """
 
 expected = Block([
-    Function("factorial", ["n"], [
+    Function("factorial", ["n"], Block([
         Var("result", Number(value=1)),
-        While(BinaryOperation(Id("n"), "!=", Number(1)), [
+        While(BinaryOperation(Id("n"), "!=", Number(1)), Block([
             Assign("result", BinaryOperation(Id("result"), "*", Id("n"))),
             Assign("n", BinaryOperation(Id("n"),"-", Number(1)))
-        ]),
+        ])),
         Return(Id("result")),
-    ])
+    ]))
 ])
 
 assert parser.parse_string(source) == expected
