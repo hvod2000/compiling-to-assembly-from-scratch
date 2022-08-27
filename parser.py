@@ -25,7 +25,8 @@ RIGHT_PAREN = token("[)]")
 LEFT_BRACE = token("[{]")
 RIGHT_BRACE = token("[}]")
 
-NUMBER = token("[0-9]+").map(lambda digits: Number(int(digits)))
+CHAR = token("'[^']'").map(lambda source: Number(ord(source[1])))
+NUMBER = token("[0-9]+").map(lambda digits: Number(int(digits))) | CHAR
 ID = token("[a-zA-Z_][a-zA-Z0-9_]*")
 
 NOT = token("!").map(lambda _: Not)
