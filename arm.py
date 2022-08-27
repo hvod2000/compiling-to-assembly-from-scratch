@@ -156,3 +156,12 @@ def _(ret: Return, env: Environment) -> Iterator[str]:
 def _(var: Var, env: Environment) -> Iterator[str]:
     yield from emit(var.value, env)
     yield from env.push_var(var.name)
+
+
+@emit.register
+def _(assgin: Assign, env: Environment) -> Iterator[str]:
+    # TODO add good error message about undefined variable
+    if assgin.name not in env.locals:
+        raise Exception(f'"{assgin.name}" is undefined')
+    yield from emit(assgin.value, env)
+    yield from env.push_var(assgin.name)
