@@ -134,3 +134,10 @@ def _(variable: Id, env: Environment) -> Iterator[str]:
     # TODO add error message about undefined variable
     offset = env.locals[variable.name]
     yield f"ldr r0, [fp, #{offset}]"
+
+
+@emit.register
+def _(ret: Return, env: Environment) -> Iterator[str]:
+    yield from emit(ret.term, env)
+    yield "mov sp, fp"
+    yield "pop {fp, pc}"
