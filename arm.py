@@ -1,4 +1,5 @@
 import functools
+from itertools import chain
 from dataclasses import dataclass
 from typing import Iterator
 from nodes import *
@@ -7,6 +8,26 @@ from nodes import *
 @dataclass
 class Environment:
     locals: dict[str, int]
+
+    def push(self, variables: list[str]) -> Iterator[str]:
+        if len(variables) > 4:
+            raise NotImplementedError(">4 params is not implemented yet")
+        registers = [f"r{i}" for i in range(len(variables))]
+        if len(registers) % 2 != 0:
+            registers.append("ip")
+        for i, v in enumerate(variables):
+            self.locals[v] = (i - len(registers)) * 4
+        if registers:
+            yield "mov fp, sp"
+            yield "push {" + ", ".join(registers) + "}"
+
+    def free(self, variables: list[str]) -> Iterator[str]:
+        if len(variables) > 4:
+            raise NotImplementedError(">4 params is not implemented yet")
+        for v in variables:
+            del self.locals[v]
+        if variables:
+            yield "mov sp, fp"
 
 
 def label_factory(seed: int = 0):
@@ -34,11 +55,12 @@ def _(block: Block, env: Environment) -> Iterator[str]:
 
 @emit.register
 def _(f: Function, env: Environment) -> Iterator[str]:
+    params = f.parameters
     if f.name == "main":
         yield ".global main"
     yield f.name + ":"
     yield "  push {fp, lr}"
-    for line in emit(f.body, env):
+    for line in chain(env.push(params), emit(f.body, env), env.free(params)):
         yield "  " + line
     yield "  mov r0, #0"
     yield "  pop {fp, pc}"
@@ -93,11 +115,11 @@ def _(call: Call, env: Environment) -> Iterator[str]:
     elif count > 1:
         # TODO: what about 8-byte stack alignment?
         yield f"sub sp, sp, #{4 * count - 4}"
-        for i, arg in enumerate(call.args[1:], 1):
+        for i, arg in enumerate(call.args[1:]):
             yield from emit(arg, env)
             yield f"str r0, [sp, #{4*i}]"
         yield from emit(call.args[0], env)
-        yield "pop {" + ", ".join(f"r{i+1}" for i in range(count)) + "}"
+        yield "pop {" + ", ".join(f"r{i+1}" for i in range(count - 1)) + "}"
     yield f"bl {call.calle}"
 
 
@@ -114,3 +136,10 @@ def _(if_node: If, env: Environment) -> Iterator[str]:
         yield f"{alt_label}:"
         yield from emit(if_node.alternative, env)
     yield f"{end_label}:"
+
+
+@emit.register
+def _(variable: Id, env: Environment) -> Iterator[str]:
+    # TODO add error message about undefined variable
+    offset = env.locals[variable.name]
+    yield f"ldr r0, [fp, #{offset}]"
