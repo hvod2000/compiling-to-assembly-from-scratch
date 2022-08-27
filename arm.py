@@ -67,15 +67,6 @@ def _(f: Function, env: Environment) -> Iterator[str]:
 
 
 @emit.register
-def _(checker: Assert, env: Environment) -> Iterator[str]:
-    yield from emit(checker.condition, env)
-    yield "cmp r0, #1"
-    yield "moveq r0, #'.'"
-    yield "movne r0, #'F'"
-    yield "bl putchar"
-
-
-@emit.register
 def _(number: Number, env: Environment) -> Iterator[str]:
     yield f"ldr r0, ={number.value}"
 

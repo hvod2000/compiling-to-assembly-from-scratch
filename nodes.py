@@ -78,8 +78,3 @@ class Assign:
 class While:
     conditional: AST
     body: AST
-
-
-@dataclass
-class Assert(AST):
-    condition: AST
