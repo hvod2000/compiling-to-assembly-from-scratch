@@ -142,7 +142,9 @@ def _(if_node: If, env: Environment) -> Iterator[str]:
 
 @emit.register
 def _(variable: Id, env: Environment) -> Iterator[str]:
-    # TODO add error message about undefined variable
+    # TODO add good error message about undefined variable
+    if variable.name not in env.locals:
+        raise Exception(f'"{variable.name}" is undefined')
     offset = env.locals[variable.name]
     yield f"ldr r0, [fp, #{offset}]"
 
