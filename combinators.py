@@ -55,11 +55,10 @@ class Parser:
             if result := self.parse(source):
                 return f(result.value).parse(result.source)
             return None
-
         return Parser(parse)
 
     def __and__(self, other):
-        return self.bind(lambda _: other)
+        return CatParser([self, other])
 
     def map(self, f):
         return self.bind(lambda x: constant(f(x)))
@@ -74,6 +73,37 @@ class Parser:
                 return result.value
             raise ParseError(f"{excess_chars} chars left")
         raise ParseError(f"Failed to parse")
+
+
+class CatParser(Parser):
+    def __init__(self, parsers: list[Parser]):
+        self.parsers = parsers
+
+    def parse(self, source: Source):
+        results = []
+        for parser in self.parsers:
+            if result := parser.parse(source):
+                value, source = result
+                results.append(value)
+            else:
+                return None
+        return ParseResult(results, source)
+
+    def bind(self, f):
+        def parse(source):
+            if result := self.parse(source):
+                return f(*result.value).parse(result.source)
+            return None
+        return Parser(parse)
+
+    def map(self, f):
+        return self.bind(lambda *args: constant(f(*args)))
+
+    def __and__(self, other):
+        return CatParser(
+            self.parsers
+            + (other.parsers if isinstance(other, CatParser) else [other])
+        )
 
 
 def constant(constant) -> Parser:

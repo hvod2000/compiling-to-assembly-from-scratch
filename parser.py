@@ -4,9 +4,9 @@ from combinators import Parser, constant, regex
 from nodes import *
 
 whitespace = regex(r"[\s]+")
-comments = regex("[/][/].*") | regex("[/][*].[\s\S]*[*][/]")
+comments = regex("[/][/].*") | regex(r"[/][*].[\s\S]*[*][/]")
 ignored = (whitespace | comments).repeat()
-token = lambda pattern: regex(pattern).bind(lambda x: ignored & constant(x))
+token = lambda pattern: (regex(pattern) & ignored).map(lambda x, _: x)
 infix = lambda operator_parser, term_parser: term_parser.bind(lambda head:
     operator_parser.bind(lambda op: term_parser.map(lambda term: (op, term)))
     .repeat().map(lambda tail:
@@ -42,23 +42,22 @@ SLASH = token("[/]").map(lambda _: "/")
 expression = Parser()
 
 # arguments <- (expression (COMMA expression)*)?
-arguments = expression.bind(lambda head:
-    (COMMA & expression).repeat().map(lambda tail: [head] + tail)
+arguments = (expression & (COMMA & expression).repeat()).map(
+    (lambda head, tail: [head] + [e for _, e in tail])
 ) | constant([])
 
 # call <- ID LEFT_PAREN arguments RIGHT_PAREN
-call = ID.bind(lambda callee:
-    LEFT_PAREN & arguments.bind(lambda args:
-    RIGHT_PAREN & constant(Call(callee, args))))
+call = (ID & LEFT_PAREN & arguments & RIGHT_PAREN).map(
+    lambda callee, left, arguments, right: Call(callee, arguments)
+)
 
 # atom <- call / ID / INTEGER / LEFT_PAREN expression RIGHT_PAREN
-atom = (
-    call | ID.map(lambda name: Id(name)) | NUMBER
-    | (LEFT_PAREN & expression).bind(lambda expr: RIGHT_PAREN & constant(expr))
+atom = ( call | ID.map(lambda name: Id(name)) | NUMBER
+    | (LEFT_PAREN & expression & RIGHT_PAREN).map(lambda _, expr, __: expr)
 )
 
 # unary <- NOT ? atom
-unary = NOT.maybe().bind(lambda n: atom.map(lambda t: Not(t) if n else t))
+unary = (NOT.maybe() & atom).map(lambda n, t: Not(t) if n else t)
 
 # infix operators
 product = infix(STAR | SLASH, unary)
@@ -73,47 +72,51 @@ expression.parse = comparison.parse
 statement = Parser()
 
 # return_stmt <- RETURN expression SEMICOLON
-return_stmt = RETURN & expression.bind(
-    lambda expr: SEMICOLON & constant(Return(expr)))
+return_stmt = (RETURN & expression & SEMICOLON).map(
+    lambda _return, e, _semicolon: Return(e)
+)
 
 # expression_stmt <- expression SEMICOLON
-expression_stmt = expression.bind(lambda term: SEMICOLON & constant(term))
+expression_stmt = (expression & SEMICOLON).map(lambda term, _: term)
 
 # if_stmt <- IF LEFT_PAREN expression RIGHT_PAREN statement ELSE statement
-if_stmt = (IF & LEFT_PAREN & expression).bind(lambda condition:
-    (RIGHT_PAREN & statement).bind(lambda consequence:
-        (ELSE & statement).map(lambda alternative:
-            If(condition, consequence, alternative))))
+if_stmt = (
+    IF & LEFT_PAREN & expression & RIGHT_PAREN & statement & ELSE & statement
+).map(lambda _if, _left, condition, _right, consequence, _else, alternative:
+    If(condition, consequence, alternative)
+)
 
 # while_stmt <- WHILE LEFT_PAREN expression RIGHT_PAREN statement
-while_stmt = (WHILE & LEFT_PAREN & expression).bind(lambda condition:
-    (RIGHT_PAREN & statement).map(lambda body:
-        While(condition, body)))
+while_stmt = (WHILE & LEFT_PAREN & expression & RIGHT_PAREN & statement).map(
+    lambda _while, _left, condition, _right, body: While(condition, body)
+)
 
 # var_stmt <- VAR ID ASSIGN expression SEMICOLON
-var_stmt = (VAR & ID).bind(lambda name:
-    (ASSIGN & expression).bind(lambda value:
-        SEMICOLON & constant(Var(name, value))))
+var_stmt = (VAR & ID & ASSIGN & expression & SEMICOLON).map(
+    lambda _var, name, _assign, value, _semicolon: Var(name, value)
+)
 
 # assignment_stmt <- ID ASSIGN expression SEMICOLON
-assignment_stmt = ID.bind(lambda name:
-    (ASSIGN & expression).bind(lambda value:
-        SEMICOLON & constant(Assign(name, value))))
+assignment_stmt = (ID & ASSIGN & expression & SEMICOLON).map(
+    lambda name, _assign, value, _semicolon: Assign(name, value)
+)
 
 # block_stmt <- LEFT_BRACE statement* RIGHT_BRACE
-block_stmt = (LEFT_BRACE & statement.repeat()).bind(lambda stmts:
-    RIGHT_BRACE & constant(Block(stmts)))
+block_stmt = (LEFT_BRACE & statement.repeat() & RIGHT_BRACE).map(
+    lambda _left, stmts, _right: Block(stmts)
+)
 
 # parameters <- (ID (COMMA ID)*)?
-parameters = ID.bind(lambda head:
-    (COMMA & ID).repeat().map(lambda tail: [head] + tail)
+parameters = (ID & (COMMA & ID).repeat()).map(
+    lambda head, tail: [head] + [arg for _, arg in tail]
 ) | constant([])
 
 # function_stmt <- FUNCTION ID LEFT_PAREN parameters RIGHT_PAREN block_stmt
-function_stmt = (FUNCTION & ID).bind(lambda name:
-    (LEFT_PAREN & parameters).bind(lambda params:
-        (RIGHT_PAREN & block_stmt).map(lambda body:
-            Function(name, params, body))))
+function_stmt = (
+    FUNCTION & ID & LEFT_PAREN & parameters & RIGHT_PAREN & block_stmt
+).map(lambda _function, name, _left, params, _right, body:
+    Function(name, params, body)
+)
 
 # statement <- all the statements defined above
 statement.parse = (
@@ -122,4 +125,4 @@ statement.parse = (
 ).parse
 
 # the parser of the whole language
-parser = ignored & statement.repeat().map(lambda stmts: Block(stmts))
+parser = (ignored & statement.repeat()).map(lambda _, stmts: Block(stmts))
