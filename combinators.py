@@ -7,10 +7,20 @@ Source = namedtuple("Source", "string index")
 ParseResult = namedtuple("ParseResult", "value source")
 
 
+class ParseFailure(namedtuple("ParseFailure", "message source")):
+    def __bool__(self):
+        return False
+
+
 class ParseError(Exception):
+    def __init__(self, message: str, line_number: int | None = None):
+        self.message = message
+        self.line_number = line_number
+        super().__init__(self.message)
+
     @staticmethod
-    def throw(message: str):
-        raise ParseError(message)
+    def throw(message: str, line_number=None):
+        raise ParseError(message, line_number)
 
 
 def match(src: Source, pattern):
@@ -18,12 +28,12 @@ def match(src: Source, pattern):
     match pattern:
         case str(string):
             if s[i : i + len(string)] != string:
-                return None
+                return ParseFailure(f"Expected {string}", src)
         case regex:
             if match := regex.match(s, i):
                 string = match.group(0)
             else:
-                return None
+                return ParseFailure(f"Expected {regex}", src)
     return ParseResult(string, Source(s, i + len(string)))
 
 
@@ -36,7 +46,15 @@ class Parser:
         return Parser(ParseError.throw(message))
 
     def __or__(self, other):
-        return Parser(lambda s: self.parse(s) or other.parse(s))
+        def parse(source: Source):
+            first = self.parse(source)
+            if isinstance(first, ParseResult):
+                return first
+            second = other.parse(source)
+            if isinstance(second, ParseResult):
+                return second
+            return max((first, second), key=lambda fail: fail.source.index)
+        return Parser(parse)
 
     def repeat(self, minimum=0, maximum=inf):
         def parse(source):
@@ -46,7 +64,7 @@ class Parser:
                 results.append(value)
             if len(results) >= minimum:
                 return ParseResult(results, source)
-            return None
+            return item
 
         return Parser(parse)
 
@@ -54,7 +72,7 @@ class Parser:
         def parse(source):
             if result := self.parse(source):
                 return f(result.value).parse(result.source)
-            return None
+            return result
         return Parser(parse)
 
     def __and__(self, other):
@@ -67,12 +85,13 @@ class Parser:
         return self.repeat(maximum=1)
 
     def parse_string(self, string: str):
-        if result := self.parse(Source(string, 0)):
-            excess_chars = len(string) - result.source.index
-            if not excess_chars:
-                return result.value
-            raise ParseError(f"{excess_chars} chars left")
-        raise ParseError(f"Failed to parse")
+        result = self.parse(Source(string, 0))
+        if isinstance(result, ParseFailure):
+            raise ParseError(result.message, result.source.index)
+        if len(string) > result.source.index:
+            message = "Unexpected characters after the end"
+            raise ParseError(message, result.source.index)
+        return result.value
 
 
 class CatParser(Parser):
@@ -82,18 +101,19 @@ class CatParser(Parser):
     def parse(self, source: Source):
         results = []
         for parser in self.parsers:
-            if result := parser.parse(source):
-                value, source = result
-                results.append(value)
-            else:
-                return None
+            result = parser.parse(source)
+            if isinstance(result, ParseFailure):
+                return result
+            value, source = result
+            results.append(value)
         return ParseResult(results, source)
 
     def bind(self, f):
         def parse(source):
-            if result := self.parse(source):
-                return f(*result.value).parse(result.source)
-            return None
+            result = self.parse(source)
+            if isinstance(result, ParseFailure):
+                return result
+            return f(*result.value).parse(result.source)
         return Parser(parse)
 
     def map(self, f):

@@ -1,6 +1,6 @@
 from functools import reduce
 
-from combinators import Parser, constant, regex
+from combinators import Parser, constant, regex, ParseError
 from nodes import *
 
 whitespace = regex(r"[\s]+")

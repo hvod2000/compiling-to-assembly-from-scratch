@@ -1,0 +1,17 @@
+#!/usr/bin/env python3
+import parser
+import pathlib
+import sys
+
+import arm
+
+source = pathlib.Path(sys.argv[1]).read_text()
+try:
+    ast = parser.parser.parse_string(source)
+except parser.ParseError as e:
+    print(e)
+    print(
+        source[: e.line_number] + "\033[91m!\033[0m" + source[e.line_number :]
+    )
+    exit(1)
+print("\n".join(arm.emit(ast, arm.Environment({}, 0))))
